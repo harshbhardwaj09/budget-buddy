@@ -180,37 +180,37 @@ export default function ExpenseInsights() {
           </p>
 
           <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">
-            <table className="w-full min-w-[480px] divide-y divide-slate-200 text-left text-sm dark:divide-slate-700">
+            <table className="w-full divide-y divide-slate-200 text-left text-sm dark:divide-slate-700">
               <thead className="bg-slate-50 dark:bg-slate-950">
                 <tr>
-                  <th className="px-6 py-4 font-medium text-slate-600 dark:text-slate-300">Date</th>
-                  <th className="px-6 py-4 font-medium text-slate-600 dark:text-slate-300">Description</th>
-                  <th className="px-6 py-4 font-medium text-slate-600 dark:text-slate-300">Category</th>
-                  <th className="px-6 py-4 font-medium text-slate-600 dark:text-slate-300">Amount</th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Date</th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Description</th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Category</th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-950">
                 {expenses.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-10 text-center text-slate-500 dark:text-slate-400">
+                    <td colSpan={4} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400 sm:px-6">
                       No expenses yet. Add an expense on the dashboard.
                     </td>
                   </tr>
                 ) : (
                   expenses.map((expense) => (
                     <tr key={expense.id} className="hover:bg-slate-50 dark:hover:bg-slate-900">
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-300">
+                      <td className="px-4 py-4 text-slate-600 dark:text-slate-300 sm:px-6">
                         {formatDate(expense.date)}
                       </td>
-                      <td className="px-6 py-4 text-slate-900 dark:text-slate-100">
+                      <td className="px-4 py-4 text-slate-900 dark:text-slate-100 sm:px-6">
                         {expense.description}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4 sm:px-6">
                         <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                           {expense.category}
                         </span>
                       </td>
-                      <td className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">
+                      <td className="px-4 py-4 font-semibold text-slate-900 dark:text-slate-100 sm:px-6">
                         {formatCurrency(expense.amount)}
                       </td>
                     </tr>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { categories, Expense } from "@/lib/budgetData";
 import { clamp } from "@/lib/utils";
 import { formatCurrency, formatDate, normalizeAmount } from "@/lib/formatters";
@@ -8,12 +8,14 @@ import { useBudget } from "@/context/BudgetContext";
 import AppHeader from "@/components/AppHeader";
 
 export default function BudgetDashboard() {
+  const formRef = useRef<HTMLDivElement | null>(null);
   const { expenses, addExpense, updateExpense, removeExpense } = useBudget();
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [form, setForm] = useState({
+    category: categories[0].value,
+    customCategory: "",
     description: "",
     amount: "",
-    category: categories[0].value,
     date: new Date().toISOString().slice(0, 10),
   });
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -23,6 +25,34 @@ export default function BudgetDashboard() {
     if (categoryFilter === "All") return expenses;
     return expenses.filter((expense) => expense.category === categoryFilter);
   }, [categoryFilter, expenses]);
+
+  const [sortConfig, setSortConfig] = useState<{
+    key: "date" | "description" | "category" | "amount";
+    direction: "asc" | "desc";
+  } | null>(null);
+
+  const sortedExpenses = useMemo(() => {
+    if (!sortConfig) return filteredExpenses;
+    const sorted = [...filteredExpenses].sort((a, b) => {
+      if (sortConfig.key === "amount") {
+        return sortConfig.direction === "asc" ? a.amount - b.amount : b.amount - a.amount;
+      }
+      const aValue = String(a[sortConfig.key]).toLowerCase();
+      const bValue = String(b[sortConfig.key]).toLowerCase();
+      if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [filteredExpenses, sortConfig]);
+
+  const toggleSort = (key: "date" | "description" | "category" | "amount") => {
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return null;
+    });
+  };
 
   const totalSpent = useMemo(
     () => expenses.reduce((sum, expense) => sum + expense.amount, 0),
@@ -42,11 +72,6 @@ export default function BudgetDashboard() {
     const rawAmount = normalizeAmount(form.amount);
     const amount = parseFloat(rawAmount);
 
-    if (!form.description.trim()) {
-      setError("Please enter a description.");
-      return;
-    }
-
     if (Number.isNaN(amount) || amount <= 0) {
       setError("Please enter a valid amount.");
       return;
@@ -54,32 +79,62 @@ export default function BudgetDashboard() {
 
     setError(null);
 
+    const selectedCategory = form.category === "Other" && form.customCategory.trim()
+      ? form.customCategory.trim()
+      : form.category;
+
     const payload = {
       date: form.date,
       description: form.description.trim(),
-      category: form.category,
+      category: selectedCategory,
       amount: clamp(amount, 0.01, 100000),
     };
 
     if (editingId) {
       updateExpense(editingId, payload);
       setEditingId(null);
+      // Reset form after saving edit
+      setForm({
+        category: categories[0].value,
+        customCategory: "",
+        description: "",
+        amount: "",
+        date: new Date().toISOString().slice(0, 10),
+      });
     } else {
       addExpense(payload);
+      // Reset form after adding new expense
+      setForm({
+        category: categories[0].value,
+        customCategory: "",
+        description: "",
+        amount: "",
+        date: new Date().toISOString().slice(0, 10),
+      });
     }
-
-    setForm((prev) => ({ ...prev, description: "", amount: "" }));
   };
 
   const startEdit = (expense: Expense) => {
     setEditingId(expense.id);
+
+    const isKnownCategory = categories.some((category) => category.value === expense.category);
     setForm({
+      category: isKnownCategory ? expense.category : "Other",
+      customCategory: isKnownCategory ? "" : expense.category,
       description: expense.description,
       amount: expense.amount.toString(),
-      category: expense.category,
       date: expense.date,
     });
     setError(null);
+
+    // Scroll the form into view when editing an existing expense,
+    // with a small additional offset so the section is fully visible.
+    setTimeout(() => {
+      if (!formRef.current) return;
+      const safeOffset = 120; // px from top
+      const top = formRef.current.getBoundingClientRect().top + window.scrollY - safeOffset;
+      window.scrollTo({ top: top > 0 ? top : 0, behavior: "smooth" });
+    }, 0);
   };
 
   const cancelEdit = () => {
@@ -110,7 +165,7 @@ export default function BudgetDashboard() {
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
         <section className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <div className="rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur">
+            <div ref={formRef} className="rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
@@ -164,64 +219,91 @@ export default function BudgetDashboard() {
               </div>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-                  Description
-                  <input
-                    value={form.description}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, description: event.target.value }))
-                    }
-                    placeholder="e.g., Lunch at cafe"
-                    className="h-11 rounded-xl border border-slate-200 bg-white/70 px-4 text-sm shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                  />
-                </label>
-
-                <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-                  Amount
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-4 top-3 text-slate-500">
-                      ₹
-                    </span>
-                    <input
-                      value={form.amount}
-                      onChange={(event) =>
-                        setForm((prev) => ({ ...prev, amount: event.target.value }))
-                      }
-                      placeholder="0.00"
-                      inputMode="decimal"
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-white/70 px-10 text-sm shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    />
-                  </div>
-                </label>
-
-                <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-                  Category
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="category" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Category
+                  </label>
                   <select
+                    id="category"
                     value={form.category}
                     onChange={(event) =>
                       setForm((prev) => ({ ...prev, category: event.target.value }))
                     }
-                    className="h-11 rounded-xl border border-slate-200 bg-white/70 px-4 text-sm shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                    className="h-11 rounded-xl border border-slate-200 bg-white/70 px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-800/70 dark:text-slate-100"
                   >
                     {categories.map((category) => (
                       <option key={category.value} value={category.value}>
                         {category.label}
                       </option>
                     ))}
+                    <option value="Other">Other (add new)</option>
                   </select>
-                </label>
+                  {form.category === "Other" && (
+                    <input
+                      id="customCategory"
+                      type="text"
+                      value={form.customCategory}
+                      onChange={(event) =>
+                        setForm((prev) => ({ ...prev, customCategory: event.target.value }))
+                      }
+                      placeholder="Enter custom category (optional)"
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white/70 px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-800/70 dark:text-slate-100"
+                    />
+                  )}
+                </div>
 
-                <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-                  Date
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="description" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Description (optional)
+                  </label>
                   <input
+                    id="description"
+                    type="text"
+                    value={form.description}
+                    onChange={(event) =>
+                      setForm((prev) => ({ ...prev, description: event.target.value }))
+                    }
+                    placeholder="e.g., Lunch at cafe"
+                    className="h-11 rounded-xl border border-slate-200 bg-white/70 px-4 text-sm text-slate-900 shadow-sm outline-none transition placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder-slate-500"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="amount" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Amount
+                  </label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400">
+                      ₹
+                    </span>
+                    <input
+                      id="amount"
+                      type="text"
+                      inputMode="decimal"
+                      value={form.amount}
+                      onChange={(event) =>
+                        setForm((prev) => ({ ...prev, amount: event.target.value }))
+                      }
+                      placeholder="0.00"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-white/70 px-10 text-sm text-slate-900 shadow-sm outline-none transition placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder-slate-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="date" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Date
+                  </label>
+                  <input
+                    id="date"
                     type="date"
                     value={form.date}
                     onChange={(event) =>
                       setForm((prev) => ({ ...prev, date: event.target.value }))
                     }
-                    className="h-11 rounded-xl border border-slate-200 bg-white/70 px-4 text-sm shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                    className="h-11 rounded-xl border border-slate-200 bg-white/70 px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-800/70 dark:text-slate-100"
                   />
-                </label>
+                </div>
               </div>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -241,49 +323,11 @@ export default function BudgetDashboard() {
             </div>
           </div>
 
-          <aside className="space-y-6">
-            <div className="rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-                Filter expenses
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Pick a category to focus on relevant transactions.
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCategoryFilter("All")}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                    categoryFilter === "All"
-                      ? "bg-indigo-600 text-white shadow"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  }`}
-                >
-                  All
-                </button>
-                {categories.map((category) => (
-                  <button
-                    key={category.value}
-                    type="button"
-                    onClick={() => setCategoryFilter(category.value)}
-                    className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                      categoryFilter === category.value
-                        ? "bg-indigo-600 text-white shadow"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    }`}
-                  >
-                    {category.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Tips</h2>
-              <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                <li className="flex gap-2">
-                  <span className="mt-0.5 inline-flex h-2 w-2 flex-none rounded-full bg-indigo-600" />
+          <div className="rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Tips</h2>
+            <ul className="mt-3 space-y-2 text-sm text-slate-600">
+              <li className="flex gap-2">
+                <span className="mt-0.5 inline-flex h-2 w-2 flex-none rounded-full bg-indigo-600" />
                   Add a new expense whenever you purchase something to keep totals accurate.
                 </li>
                 <li className="flex gap-2">
@@ -296,7 +340,6 @@ export default function BudgetDashboard() {
                 </li>
               </ul>
             </div>
-          </aside>
         </section>
 
         <section className="mt-10 rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur">
@@ -327,53 +370,69 @@ export default function BudgetDashboard() {
           </div>
 
           <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="w-full min-w-[480px] divide-y divide-slate-200 text-left text-sm">
-              <thead className="bg-slate-50">
+            <table className="w-full divide-y divide-slate-200 text-left text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800">
                 <tr>
-                  <th className="px-6 py-4 font-medium text-slate-600">Date</th>
-                  <th className="px-6 py-4 font-medium text-slate-600">Description</th>
-                  <th className="px-6 py-4 font-medium text-slate-600">Category</th>
-                  <th className="px-6 py-4 font-medium text-slate-600">Amount</th>
-                  <th className="px-6 py-4 font-medium text-slate-600"> </th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("date")}>Date <span>{sortConfig?.key === "date" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                  </th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("description")}>Description <span>{sortConfig?.key === "description" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                  </th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("category")}>Category <span>{sortConfig?.key === "category" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                  </th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("amount")}>Amount <span>{sortConfig?.key === "amount" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                  </th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 bg-white">
+              <tbody className="divide-y divide-slate-200 bg-white dark:bg-slate-900">
                 {filteredExpenses.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-slate-500">
+                    <td colSpan={5} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400 sm:px-6">
                       No expenses yet. Add one to get started.
                     </td>
                   </tr>
                 ) : (
-                  filteredExpenses.map((expense) => (
-                    <tr key={expense.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4 text-slate-600">{formatDate(expense.date)}</td>
-                      <td className="px-6 py-4 text-slate-900 dark:text-slate-100">
+                  sortedExpenses.map((expense) => (
+                    <tr key={expense.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <td className="px-4 py-4 text-slate-600 dark:text-slate-300 sm:px-6">{formatDate(expense.date)}</td>
+                      <td className="px-4 py-4 text-slate-900 dark:text-slate-100 sm:px-6">
                         {expense.description}
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          {expense.category}
-                        </span>
+                      <td className="px-4 py-4 sm:px-6">
+                        {categories.some((category) => category.value === expense.category) ? (
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                            {expense.category}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                            Custom: {expense.category}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">
+                      <td className="px-4 py-4 font-semibold text-slate-900 dark:text-slate-100 sm:px-6">
                         {formatCurrency(expense.amount)}
                       </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(expense)}
-                          className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeExpenseEntry(expense.id)}
-                          className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100"
-                        >
-                          Delete
-                        </button>
+                      <td className="px-4 py-4 sm:px-6">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(expense)}
+                            className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeExpenseEntry(expense.id)}
+                            className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
