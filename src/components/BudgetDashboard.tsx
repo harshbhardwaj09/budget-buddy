@@ -522,7 +522,7 @@ export default function BudgetDashboard() {
                   : `${incomes.length} income${incomes.length === 1 ? "" : "s"} shown.`}
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {/* Toggle pill */}
               <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
                 <button
@@ -541,12 +541,12 @@ export default function BudgetDashboard() {
                 </button>
               </div>
               {tableView === "expenses" && (
-                <label className="text-sm font-medium text-slate-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
                   Show
                   <select
                     value={categoryFilter}
                     onChange={(event) => setCategoryFilter(event.target.value)}
-                    className="ml-2 inline-flex h-10 w-40 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                    className="h-10 min-w-0 max-w-[10rem] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                   >
                     <option value="All">All categories</option>
                     {categories.map((category) => (

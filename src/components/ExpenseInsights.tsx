@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useBudget } from "@/context/BudgetContext";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { Income } from "@/lib/budgetData";
+import { Expense, Income, categories } from "@/lib/budgetData";
 import AppHeader from "@/components/AppHeader";
 import {
   PieChart,
@@ -18,7 +18,7 @@ function monthLabel(date: Date) {
 }
 
 export default function ExpenseInsights() {
-  const { expenses, incomes, updateIncome, removeIncome } = useBudget();
+  const { expenses, incomes, updateExpense, removeExpense, updateIncome, removeIncome } = useBudget();
 
   const today = new Date();
   const defaultFrom = new Date();
@@ -149,6 +149,7 @@ export default function ExpenseInsights() {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [tableView, setTableView] = useState<"expenses" | "income">("expenses");
   const [editingIncome, setEditingIncome] = useState<{ id: string; source: string; description: string; amount: string; date: string } | null>(null);
+  const [editingExpense, setEditingExpense] = useState<{ id: string; date: string; description: string; category: string; amount: string } | null>(null);
 
   const [sortConfig, setSortConfig] = useState<{
     key: "date" | "description" | "category" | "amount";
@@ -204,6 +205,20 @@ export default function ExpenseInsights() {
     if (Number.isNaN(amount) || amount <= 0 || !editingIncome.source.trim()) return;
     updateIncome(editingIncome.id, { source: editingIncome.source.trim(), description: editingIncome.description.trim(), amount, date: editingIncome.date });
     setEditingIncome(null);
+  };
+
+  const startEditExpense = (exp: Expense) => {
+    setEditingExpense({ id: exp.id, date: exp.date, description: exp.description, category: exp.category, amount: exp.amount.toString() });
+  };
+
+  const cancelEditExpense = () => setEditingExpense(null);
+
+  const saveEditExpense = () => {
+    if (!editingExpense) return;
+    const amount = parseFloat(editingExpense.amount);
+    if (Number.isNaN(amount) || amount <= 0) return;
+    updateExpense(editingExpense.id, { date: editingExpense.date, description: editingExpense.description.trim(), category: editingExpense.category, amount });
+    setEditingExpense(null);
   };
 
 
@@ -477,25 +492,59 @@ export default function ExpenseInsights() {
                     <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
                       <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("amount")}>Amount <span>{sortConfig?.key === "amount" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
                     </th>
+                    <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
                   {filteredExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400 sm:px-6">
+                      <td colSpan={5} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400 sm:px-6">
                         No expenses in the selected date range.
                       </td>
                     </tr>
                   ) : (
                     sortedExpenses.map((expense) => (
-                      <tr key={expense.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                        <td className="px-4 py-4 text-slate-600 dark:text-slate-300 sm:px-6">{formatDate(expense.date)}</td>
-                        <td className="px-4 py-4 text-slate-900 dark:text-slate-100 sm:px-6">{expense.description}</td>
-                        <td className="px-4 py-4 sm:px-6">
-                          <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">{expense.category}</span>
-                        </td>
-                        <td className="px-4 py-4 font-semibold text-red-600 dark:text-red-400 sm:px-6">-{formatCurrency(expense.amount)}</td>
-                      </tr>
+                      editingExpense?.id === expense.id ? (
+                        <tr key={expense.id} className="bg-indigo-50/50 dark:bg-indigo-900/10">
+                          <td className="px-4 py-2 sm:px-6">
+                            <input type="date" value={editingExpense.date} onChange={(e) => setEditingExpense({ ...editingExpense, date: e.target.value })} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                          </td>
+                          <td className="px-4 py-2 sm:px-6">
+                            <input type="text" value={editingExpense.description} onChange={(e) => setEditingExpense({ ...editingExpense, description: e.target.value })} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                          </td>
+                          <td className="px-4 py-2 sm:px-6">
+                            <select value={editingExpense.category} onChange={(e) => setEditingExpense({ ...editingExpense, category: e.target.value })} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                              {categories.map((cat) => (
+                                <option key={cat.value} value={cat.value}>{cat.label}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-2 sm:px-6">
+                            <input type="text" inputMode="decimal" value={editingExpense.amount} onChange={(e) => setEditingExpense({ ...editingExpense, amount: e.target.value })} className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                          </td>
+                          <td className="px-4 py-2 sm:px-6">
+                            <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
+                              <button type="button" onClick={saveEditExpense} className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50">Save</button>
+                              <button type="button" onClick={cancelEditExpense} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">Cancel</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={expense.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                          <td className="px-4 py-4 text-slate-600 dark:text-slate-300 sm:px-6">{formatDate(expense.date)}</td>
+                          <td className="px-4 py-4 text-slate-900 dark:text-slate-100 sm:px-6">{expense.description}</td>
+                          <td className="px-4 py-4 sm:px-6">
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">{expense.category}</span>
+                          </td>
+                          <td className="px-4 py-4 font-semibold text-red-600 dark:text-red-400 sm:px-6">-{formatCurrency(expense.amount)}</td>
+                          <td className="px-4 py-4 sm:px-6">
+                            <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
+                              <button type="button" onClick={() => startEditExpense(expense)} className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50">Edit</button>
+                              <button type="button" onClick={() => removeExpense(expense.id)} className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50">Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
                     ))
                   )}
                 </tbody>
