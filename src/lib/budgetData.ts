@@ -6,6 +6,14 @@ export type Expense = {
   amount: number;
 };
 
+export type Income = {
+  id: string;
+  date: string; // ISO yyyy-mm-dd
+  description: string;
+  source: string;
+  amount: number;
+};
+
 export const categories = [
   { value: "Food", label: "Food" },
   { value: "Transportation", label: "Transportation" },
@@ -51,5 +59,15 @@ export const initialExpenses: Expense[] = [
     description: "New running shoes",
     category: "Shopping",
     amount: 112.0,
+  },
+];
+
+export const initialIncomes: Income[] = [
+  {
+    id: "i1",
+    date: "2026-03-01",
+    description: "Monthly salary",
+    source: "Salary",
+    amount: 50000,
   },
 ];

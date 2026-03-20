@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useBudget } from "@/context/BudgetContext";
 import { formatCurrency, formatDate } from "@/lib/formatters";
+import { Income } from "@/lib/budgetData";
 import AppHeader from "@/components/AppHeader";
 import {
   PieChart,
@@ -17,7 +18,7 @@ function monthLabel(date: Date) {
 }
 
 export default function ExpenseInsights() {
-  const { expenses } = useBudget();
+  const { expenses, incomes, updateIncome, removeIncome } = useBudget();
 
   const today = new Date();
   const defaultFrom = new Date();
@@ -72,6 +73,17 @@ export default function ExpenseInsights() {
     () => filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0),
     [filteredExpenses]
   );
+
+  const filteredIncomes = useMemo(() => {
+    return incomes.filter((inc) => inc.date >= effectiveFrom && inc.date <= effectiveTo);
+  }, [incomes, effectiveFrom, effectiveTo]);
+
+  const totalIncome = useMemo(
+    () => filteredIncomes.reduce((sum, inc) => sum + inc.amount, 0),
+    [filteredIncomes]
+  );
+
+  const savings = totalIncome - totalSpent;
 
   const categoryTotals = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -135,6 +147,8 @@ export default function ExpenseInsights() {
   const colors = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#14b8a6"];
 
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [tableView, setTableView] = useState<"expenses" | "income">("expenses");
+  const [editingIncome, setEditingIncome] = useState<{ id: string; source: string; description: string; amount: string; date: string } | null>(null);
 
   const [sortConfig, setSortConfig] = useState<{
     key: "date" | "description" | "category" | "amount";
@@ -163,6 +177,35 @@ export default function ExpenseInsights() {
     });
   };
 
+  const sortedIncomes = useMemo(() => {
+    if (!sortConfig) return filteredIncomes;
+    return [...filteredIncomes].sort((a, b) => {
+      if (sortConfig.key === "amount") {
+        return sortConfig.direction === "asc" ? a.amount - b.amount : b.amount - a.amount;
+      }
+      const aKey = sortConfig.key === "description" ? "source" : sortConfig.key;
+      const aVal = String((a as Record<string, unknown>)[aKey] ?? "").toLowerCase();
+      const bVal = String((b as Record<string, unknown>)[aKey] ?? "").toLowerCase();
+      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredIncomes, sortConfig]);
+
+  const startEditIncome = (inc: Income) => {
+    setEditingIncome({ id: inc.id, source: inc.source, description: inc.description, amount: inc.amount.toString(), date: inc.date });
+  };
+
+  const cancelEditIncome = () => setEditingIncome(null);
+
+  const saveEditIncome = () => {
+    if (!editingIncome) return;
+    const amount = parseFloat(editingIncome.amount);
+    if (Number.isNaN(amount) || amount <= 0 || !editingIncome.source.trim()) return;
+    updateIncome(editingIncome.id, { source: editingIncome.source.trim(), description: editingIncome.description.trim(), amount, date: editingIncome.date });
+    setEditingIncome(null);
+  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-sky-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950">
@@ -171,7 +214,8 @@ export default function ExpenseInsights() {
         subtitle="See how your spending trends over recent weeks and months."
         stats={[
           { label: "transactions", value: expenses.length },
-          { label: "spent", value: formatCurrency(expenses.reduce((sum, e) => sum + e.amount, 0)) },
+          { label: "total income", value: formatCurrency(incomes.reduce((sum, e) => sum + e.amount, 0)) },
+          { label: "total spent", value: formatCurrency(expenses.reduce((sum, e) => sum + e.amount, 0)) },
         ]}
       />
 
@@ -316,11 +360,21 @@ export default function ExpenseInsights() {
             </div>
 
             <div className="mt-8 space-y-5">
-              {/* Total card */}
-              <div className="mx-auto flex max-w-xs items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 px-6 py-5 shadow-sm dark:from-indigo-950/40 dark:via-purple-950/30 dark:to-pink-950/20">
-                <div className="text-center">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Spent</div>
-                  <div className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">{formatCurrency(totalSpent)}</div>
+              {/* Summary cards */}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-emerald-50 px-5 py-4 text-center shadow-sm dark:bg-emerald-950/30">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Income</div>
+                  <div className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">{formatCurrency(totalIncome)}</div>
+                </div>
+                <div className="rounded-2xl bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 px-5 py-4 text-center shadow-sm dark:from-indigo-950/40 dark:via-purple-950/30 dark:to-pink-950/20">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Spent</div>
+                  <div className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">{formatCurrency(totalSpent)}</div>
+                </div>
+                <div className={`rounded-2xl px-5 py-4 text-center shadow-sm ${savings >= 0 ? "bg-green-50 dark:bg-green-950/30" : "bg-red-50 dark:bg-red-950/30"}`}>
+                  <div className={`text-xs font-semibold uppercase tracking-wider ${savings >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                    {savings >= 0 ? "Savings" : "Over Budget"}
+                  </div>
+                  <div className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">{formatCurrency(Math.abs(savings))}</div>
                 </div>
               </div>
 
@@ -368,68 +422,150 @@ export default function ExpenseInsights() {
         <section className="mt-10 rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-[var(--card)]/60">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Expense Log</h2>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Transaction Log</h2>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">
-                {filteredExpenses.length} expense{filteredExpenses.length === 1 ? "" : "s"} in selected range.
+                {tableView === "expenses"
+                  ? `${filteredExpenses.length} expense${filteredExpenses.length === 1 ? "" : "s"} in selected range.`
+                  : `${filteredIncomes.length} income${filteredIncomes.length === 1 ? "" : "s"} in selected range.`}
               </p>
             </div>
-            {sortConfig && (
-              <button
-                type="button"
-                onClick={() => setSortConfig(null)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              >
-                Sorted by {sortConfig.key} {sortConfig.direction === "asc" ? "↑" : "↓"}
-                <span className="text-slate-400">&times;</span>
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {/* Toggle pill */}
+              <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setTableView("expenses"); setSortConfig(null); }}
+                  className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-all ${tableView === "expenses" ? "bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300" : "text-slate-500 hover:text-slate-700 dark:text-slate-400"}`}
+                >
+                  Expenses
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTableView("income"); setSortConfig(null); }}
+                  className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-all ${tableView === "income" ? "bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300" : "text-slate-500 hover:text-slate-700 dark:text-slate-400"}`}
+                >
+                  Income
+                </button>
+              </div>
+              {sortConfig && (
+                <button
+                  type="button"
+                  onClick={() => setSortConfig(null)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  Sorted by {sortConfig.key} {sortConfig.direction === "asc" ? "↑" : "↓"}
+                  <span className="text-slate-400">&times;</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">
-            <table className="w-full divide-y divide-slate-200 text-left text-sm dark:divide-slate-700">
-              <thead className="bg-slate-50 dark:bg-slate-800">
-                <tr>
-                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
-                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("date")}>Date <span>{sortConfig?.key === "date" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
-                  </th>
-                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
-                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("description")}>Description <span>{sortConfig?.key === "description" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
-                  </th>
-                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
-                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("category")}>Category <span>{sortConfig?.key === "category" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
-                  </th>
-                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
-                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("amount")}>Amount <span>{sortConfig?.key === "amount" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
-                {filteredExpenses.length === 0 ? (
+            {tableView === "expenses" ? (
+              <table className="w-full divide-y divide-slate-200 text-left text-sm dark:divide-slate-700">
+                <thead className="bg-slate-50 dark:bg-slate-800">
                   <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400 sm:px-6">
-                      No expenses in the selected date range.
-                    </td>
+                    <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                      <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("date")}>Date <span>{sortConfig?.key === "date" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                    </th>
+                    <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                      <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("description")}>Description <span>{sortConfig?.key === "description" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                    </th>
+                    <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                      <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("category")}>Category <span>{sortConfig?.key === "category" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                    </th>
+                    <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                      <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("amount")}>Amount <span>{sortConfig?.key === "amount" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                    </th>
                   </tr>
-                ) : (
-                  sortedExpenses.map((expense) => (
-                    <tr key={expense.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                      <td className="px-4 py-4 text-slate-600 dark:text-slate-300 sm:px-6">{formatDate(expense.date)}</td>
-                      <td className="px-4 py-4 text-slate-900 dark:text-slate-100 sm:px-6">
-                        {expense.description}
-                      </td>
-                      <td className="px-4 py-4 sm:px-6">
-                        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                          {expense.category}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 font-semibold text-slate-900 dark:text-slate-100 sm:px-6">
-                        {formatCurrency(expense.amount)}
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+                  {filteredExpenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400 sm:px-6">
+                        No expenses in the selected date range.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    sortedExpenses.map((expense) => (
+                      <tr key={expense.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <td className="px-4 py-4 text-slate-600 dark:text-slate-300 sm:px-6">{formatDate(expense.date)}</td>
+                        <td className="px-4 py-4 text-slate-900 dark:text-slate-100 sm:px-6">{expense.description}</td>
+                        <td className="px-4 py-4 sm:px-6">
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">{expense.category}</span>
+                        </td>
+                        <td className="px-4 py-4 font-semibold text-red-600 dark:text-red-400 sm:px-6">-{formatCurrency(expense.amount)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full divide-y divide-slate-200 text-left text-sm dark:divide-slate-700">
+                <thead className="bg-slate-50 dark:bg-slate-800">
+                  <tr>
+                    <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                      <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("date")}>Date <span>{sortConfig?.key === "date" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                    </th>
+                    <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                      <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("description")}>Source <span>{sortConfig?.key === "description" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                    </th>
+                    <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Description</th>
+                    <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                      <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("amount")}>Amount <span>{sortConfig?.key === "amount" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                    </th>
+                    <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+                  {filteredIncomes.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400 sm:px-6">
+                        No income in the selected date range.
+                      </td>
+                    </tr>
+                  ) : (
+                    sortedIncomes.map((inc) => (
+                      editingIncome?.id === inc.id ? (
+                        <tr key={inc.id} className="bg-emerald-50/50 dark:bg-emerald-900/10">
+                          <td className="px-4 py-2 sm:px-6">
+                            <input type="date" value={editingIncome.date} onChange={(e) => setEditingIncome({ ...editingIncome, date: e.target.value })} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                          </td>
+                          <td className="px-4 py-2 sm:px-6">
+                            <input type="text" value={editingIncome.source} onChange={(e) => setEditingIncome({ ...editingIncome, source: e.target.value })} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                          </td>
+                          <td className="px-4 py-2 sm:px-6">
+                            <input type="text" value={editingIncome.description} onChange={(e) => setEditingIncome({ ...editingIncome, description: e.target.value })} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                          </td>
+                          <td className="px-4 py-2 sm:px-6">
+                            <input type="text" inputMode="decimal" value={editingIncome.amount} onChange={(e) => setEditingIncome({ ...editingIncome, amount: e.target.value })} className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                          </td>
+                          <td className="px-4 py-2 sm:px-6">
+                            <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
+                              <button type="button" onClick={saveEditIncome} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50">Save</button>
+                              <button type="button" onClick={cancelEditIncome} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">Cancel</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={inc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                          <td className="px-4 py-4 text-slate-600 dark:text-slate-300 sm:px-6">{formatDate(inc.date)}</td>
+                          <td className="px-4 py-4 text-slate-900 dark:text-slate-100 sm:px-6">{inc.source}</td>
+                          <td className="px-4 py-4 text-slate-900 dark:text-slate-100 sm:px-6">{inc.description}</td>
+                          <td className="px-4 py-4 font-semibold text-emerald-600 dark:text-emerald-400 sm:px-6">+{formatCurrency(inc.amount)}</td>
+                          <td className="px-4 py-4 sm:px-6">
+                            <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
+                              <button type="button" onClick={() => startEditIncome(inc)} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50">Edit</button>
+                              <button type="button" onClick={() => removeIncome(inc.id)} className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50">Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
       </main>
