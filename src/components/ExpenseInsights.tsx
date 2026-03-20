@@ -23,36 +23,50 @@ export default function ExpenseInsights() {
   const defaultFrom = new Date();
   defaultFrom.setMonth(defaultFrom.getMonth() - 1);
 
-  const [range, setRange] = useState<"7d" | "30d" | "90d" | "year" | "custom">("30d");
+  const [mode, setMode] = useState<"day" | "month" | "range">("day");
+  const [singleDate, setSingleDate] = useState(today.toISOString().slice(0, 10));
+  const [selectedMonth, setSelectedMonth] = useState(
+    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`
+  );
   const [fromDate, setFromDate] = useState(defaultFrom.toISOString().slice(0, 10));
   const [toDate, setToDate] = useState(today.toISOString().slice(0, 10));
 
-  const applyRange = (selected: "7d" | "30d" | "90d" | "year" | "custom") => {
-    setRange(selected);
-    if (selected === "custom") return;
-    const now = new Date();
-    let start = new Date();
-    if (selected === "7d") {
-      start.setDate(now.getDate() - 6);
-    } else if (selected === "30d") {
-      start.setDate(now.getDate() - 29);
-    } else if (selected === "90d") {
-      start.setDate(now.getDate() - 89);
-    } else if (selected === "year") {
-      start.setFullYear(now.getFullYear() - 1);
-      start.setDate(start.getDate() + 1);
+  const { effectiveFrom, effectiveTo } = useMemo(() => {
+    if (mode === "day") {
+      return { effectiveFrom: singleDate, effectiveTo: singleDate };
     }
-    setFromDate(start.toISOString().slice(0, 10));
-    setToDate(now.toISOString().slice(0, 10));
-  };
+    if (mode === "month") {
+      const [y, m] = selectedMonth.split("-").map(Number);
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m, 0);
+      return {
+        effectiveFrom: start.toISOString().slice(0, 10),
+        effectiveTo: end.toISOString().slice(0, 10),
+      };
+    }
+    return { effectiveFrom: fromDate, effectiveTo: toDate };
+  }, [mode, singleDate, selectedMonth, fromDate, toDate]);
+
+  // Build month options: last 12 months
+  const monthOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      opts.push({
+        value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+        label: d.toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+      });
+    }
+    return opts;
+  }, []);
 
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((expense) => {
       const dateStr = expense.date;
-      return dateStr >= fromDate && dateStr <= toDate;
+      return dateStr >= effectiveFrom && dateStr <= effectiveTo;
     });
-  }, [expenses, fromDate, toDate]);
+  }, [expenses, effectiveFrom, effectiveTo]);
 
   const totalSpent = useMemo(
     () => filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0),
@@ -83,8 +97,8 @@ export default function ExpenseInsights() {
 
   const monthlyTotals = useMemo(() => {
     const monthlyMap: Record<string, number> = {};
-    const from = new Date(fromDate);
-    const to = new Date(toDate);
+    const from = new Date(effectiveFrom);
+    const to = new Date(effectiveTo);
 
     // Build month buckets between from and to
     const current = new Date(from.getFullYear(), from.getMonth(), 1);
@@ -105,19 +119,49 @@ export default function ExpenseInsights() {
     return Object.entries(monthlyMap)
       .map(([key, value]) => ({ month: monthLabel(new Date(key)), amount: value }))
       .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
-  }, [filteredExpenses, fromDate, toDate]);
+  }, [filteredExpenses, effectiveFrom, effectiveTo]);
 
-  const resetDateRange = () => {
+  const resetFilters = () => {
     const now2 = new Date();
-    const prevMonth = new Date();
-    prevMonth.setMonth(prevMonth.getMonth() - 1);
-    setFromDate(prevMonth.toISOString().slice(0, 10));
+    setMode("day");
+    setSingleDate(now2.toISOString().slice(0, 10));
+    setSelectedMonth(`${now2.getFullYear()}-${String(now2.getMonth() + 1).padStart(2, "0")}`);
+    const prev = new Date();
+    prev.setMonth(prev.getMonth() - 1);
+    setFromDate(prev.toISOString().slice(0, 10));
     setToDate(now2.toISOString().slice(0, 10));
   };
 
   const colors = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#14b8a6"];
 
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  const [sortConfig, setSortConfig] = useState<{
+    key: "date" | "description" | "category" | "amount";
+    direction: "asc" | "desc";
+  } | null>(null);
+
+  const sortedExpenses = useMemo(() => {
+    if (!sortConfig) return filteredExpenses;
+    return [...filteredExpenses].sort((a, b) => {
+      if (sortConfig.key === "amount") {
+        return sortConfig.direction === "asc" ? a.amount - b.amount : b.amount - a.amount;
+      }
+      const aVal = String(a[sortConfig.key]).toLowerCase();
+      const bVal = String(b[sortConfig.key]).toLowerCase();
+      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredExpenses, sortConfig]);
+
+  const toggleSort = (key: "date" | "description" | "category" | "amount") => {
+    setSortConfig((prev) => {
+      if (!prev || prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return null;
+    });
+  };
 
 
   return (
@@ -133,52 +177,70 @@ export default function ExpenseInsights() {
 
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
         <section className="rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-[var(--card)]/60">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="text-sm font-medium text-slate-700">Range:</div>
-            <select
-              value={range}
-              onChange={(e) => applyRange(e.target.value as "7d" | "30d" | "90d" | "year" | "custom")}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-            >
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="90d">Last 90 days</option>
-              <option value="year">Last 365 days</option>
-              <option value="custom">Custom</option>
-            </select>
+          {/* Mode tabs */}
+          <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+            {(["day", "month", "range"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                  mode === m
+                    ? "bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                }`}
+              >
+                {m === "day" ? "Day" : m === "month" ? "Month" : "Date Range"}
+              </button>
+            ))}
+          </div>
 
-            {range === "custom" ? (
+          {/* Inputs row */}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {mode === "day" && (
+              <input
+                type="date"
+                value={singleDate}
+                onChange={(e) => setSingleDate(e.target.value)}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              />
+            )}
+
+            {mode === "month" && (
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                {monthOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            )}
+
+            {mode === "range" && (
               <>
-                <div className="text-sm font-medium text-slate-700">From</div>
+                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">From</span>
                 <input
                   type="date"
                   value={fromDate}
-                  onChange={(e) => {
-                    setFromDate(e.target.value);
-                    setRange("custom");
-                  }}
-                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 />
-                <div className="text-sm font-medium text-slate-700">To</div>
+                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">To</span>
                 <input
                   type="date"
                   value={toDate}
-                  onChange={(e) => {
-                    setToDate(e.target.value);
-                    setRange("custom");
-                  }}
-                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 />
               </>
-            ) : null}
+            )}
 
             <button
               type="button"
-              onClick={() => {
-                resetDateRange();
-                applyRange("30d");
-              }}
-              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
+              onClick={resetFilters}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             >
               Reset
             </button>
@@ -304,41 +366,59 @@ export default function ExpenseInsights() {
         </section>
 
         <section className="mt-10 rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-[var(--card)]/60">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-            Expense log
-          </h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">
-            See all transactions recorded so far.
-          </p>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Expense Log</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">
+                {filteredExpenses.length} expense{filteredExpenses.length === 1 ? "" : "s"} in selected range.
+              </p>
+            </div>
+            {sortConfig && (
+              <button
+                type="button"
+                onClick={() => setSortConfig(null)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Sorted by {sortConfig.key} {sortConfig.direction === "asc" ? "↑" : "↓"}
+                <span className="text-slate-400">&times;</span>
+              </button>
+            )}
+          </div>
 
           <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">
             <table className="w-full divide-y divide-slate-200 text-left text-sm dark:divide-slate-700">
-              <thead className="bg-slate-50 dark:bg-slate-950">
+              <thead className="bg-slate-50 dark:bg-slate-800">
                 <tr>
-                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Date</th>
-                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Description</th>
-                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Category</th>
-                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">Amount</th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("date")}>Date <span>{sortConfig?.key === "date" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                  </th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("description")}>Description <span>{sortConfig?.key === "description" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                  </th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("category")}>Category <span>{sortConfig?.key === "category" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                  </th>
+                  <th className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300 sm:px-6">
+                    <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => toggleSort("amount")}>Amount <span>{sortConfig?.key === "amount" ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}</span></button>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-950">
-                {expenses.length === 0 ? (
+              <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+                {filteredExpenses.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400 sm:px-6">
-                      No expenses yet. Add an expense on the dashboard.
+                      No expenses in the selected date range.
                     </td>
                   </tr>
                 ) : (
-                  expenses.map((expense) => (
-                    <tr key={expense.id} className="hover:bg-slate-50 dark:hover:bg-slate-900">
-                      <td className="px-4 py-4 text-slate-600 dark:text-slate-300 sm:px-6">
-                        {formatDate(expense.date)}
-                      </td>
+                  sortedExpenses.map((expense) => (
+                    <tr key={expense.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <td className="px-4 py-4 text-slate-600 dark:text-slate-300 sm:px-6">{formatDate(expense.date)}</td>
                       <td className="px-4 py-4 text-slate-900 dark:text-slate-100 sm:px-6">
                         {expense.description}
                       </td>
                       <td className="px-4 py-4 sm:px-6">
-                        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                           {expense.category}
                         </span>
                       </td>
