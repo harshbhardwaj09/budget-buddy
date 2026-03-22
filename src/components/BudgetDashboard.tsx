@@ -230,10 +230,6 @@ export default function BudgetDashboard() {
       <AppHeader
         title="Budget Buddy"
         subtitle="Track expenses, categorize spending, and keep your money on track."
-        stats={[
-          { label: "transactions", value: expenses.length },
-          { label: "spent", value: formatCurrency(totalSpent) },
-        ]}
       />
 
       <main className="mx-auto w-full max-w-6xl px-6 py-10">

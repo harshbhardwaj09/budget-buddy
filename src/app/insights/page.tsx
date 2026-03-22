@@ -1,5 +1,10 @@
 import ExpenseInsights from "@/components/ExpenseInsights";
+import AuthGuard from "@/components/AuthGuard";
 
 export default function InsightsPage() {
-  return <ExpenseInsights />;
+  return (
+    <AuthGuard>
+      <ExpenseInsights />
+    </AuthGuard>
+  );
 }
