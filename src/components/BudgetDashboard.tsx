@@ -10,7 +10,7 @@ import AppHeader from "@/components/AppHeader";
 export default function BudgetDashboard() {
   const formRef = useRef<HTMLDivElement | null>(null);
   const incomeFormRef = useRef<HTMLDivElement | null>(null);
-  const { expenses, addExpense, updateExpense, removeExpense, incomes, addIncome, updateIncome, removeIncome } = useBudget();
+  const { expenses, addExpense, updateExpense, removeExpense, incomes, addIncome, updateIncome, removeIncome, loading, error: budgetError } = useBudget();
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [form, setForm] = useState({
     category: categories[0].value,
@@ -86,7 +86,7 @@ export default function BudgetDashboard() {
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
   const [incomeErrorField, setIncomeErrorField] = useState<string | null>(null);
 
-  const addIncomeEntry = () => {
+  const addIncomeEntry = async () => {
     const rawAmount = normalizeAmount(incomeForm.amount);
     const amount = parseFloat(rawAmount);
     if (!incomeForm.source.trim()) {
@@ -108,10 +108,10 @@ export default function BudgetDashboard() {
     };
 
     if (editingIncomeId) {
-      updateIncome(editingIncomeId, payload);
+      await updateIncome(editingIncomeId, payload);
       setEditingIncomeId(null);
     } else {
-      addIncome(payload);
+      await addIncome(payload);
     }
     setIncomeForm({ source: "", description: "", amount: "", date: new Date().toISOString().slice(0, 10) });
   };
@@ -141,7 +141,7 @@ export default function BudgetDashboard() {
     setIncomeErrorField(null);
   };
 
-  const addExpenseEntry = () => {
+  const addExpenseEntry = async () => {
     const rawAmount = normalizeAmount(form.amount);
     const amount = parseFloat(rawAmount);
 
@@ -165,27 +165,19 @@ export default function BudgetDashboard() {
     };
 
     if (editingId) {
-      updateExpense(editingId, payload);
+      await updateExpense(editingId, payload);
       setEditingId(null);
-      // Reset form after saving edit
-      setForm({
-        category: categories[0].value,
-        customCategory: "",
-        description: "",
-        amount: "",
-        date: new Date().toISOString().slice(0, 10),
-      });
     } else {
-      addExpense(payload);
-      // Reset form after adding new expense
-      setForm({
-        category: categories[0].value,
-        customCategory: "",
-        description: "",
-        amount: "",
-        date: new Date().toISOString().slice(0, 10),
-      });
+      await addExpense(payload);
     }
+    // Reset form
+    setForm({
+      category: categories[0].value,
+      customCategory: "",
+      description: "",
+      amount: "",
+      date: new Date().toISOString().slice(0, 10),
+    });
   };
 
   const startEdit = (expense: Expense) => {
@@ -225,6 +217,18 @@ export default function BudgetDashboard() {
   };
 
 
+  // Loading state - jab tak data load nahi hota
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950">
+        <AppHeader title="Budget Buddy" subtitle="Loading your data..." />
+        <div className="flex items-center justify-center py-20 text-slate-500">
+          Loading your budget data...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950">
       <AppHeader
@@ -233,6 +237,12 @@ export default function BudgetDashboard() {
       />
 
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
+        {/* Error banner */}
+        {budgetError && (
+          <div className="mb-6 rounded-2xl bg-red-50 px-5 py-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
+            {budgetError}
+          </div>
+        )}
         <section className="grid gap-6 lg:grid-cols-2">
           <div>
             <div ref={formRef} className="rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur">

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/context/AuthContext";
 import { BudgetProvider } from "@/context/BudgetContext";
-import SessionProviderWrapper from "@/components/SessionProviderWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,9 +30,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-screen flex flex-col bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50 text-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 dark:text-slate-100">
-        <SessionProviderWrapper>
+        <AuthProvider>
           <BudgetProvider>{children}</BudgetProvider>
-        </SessionProviderWrapper>
+        </AuthProvider>
       </body>
     </html>
   );

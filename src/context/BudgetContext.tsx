@@ -1,133 +1,191 @@
+// BudgetContext - Ab sab data Firebase Firestore se aata hai
+// Har user ka data alag alag hota hai (userId ke basis pe)
+// Real-time sync hota hai - ek device pe add karo, doosre pe dikhega
+
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { Expense, Income, initialExpenses, initialIncomes } from "@/lib/budgetData";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { Expense, Income } from "@/lib/budgetData";
+import { useAuth } from "@/context/AuthContext";
+import {
+  addExpenseToFirestore,
+  updateExpenseInFirestore,
+  deleteExpenseFromFirestore,
+  listenToExpenses,
+  addIncomeToFirestore,
+  updateIncomeInFirestore,
+  deleteIncomeFromFirestore,
+  listenToIncomes,
+} from "@/lib/firebaseService";
 
 type BudgetContextValue = {
   expenses: Expense[];
-  addExpense: (expense: Omit<Expense, "id">) => void;
-  updateExpense: (id: string, updated: Omit<Expense, "id">) => void;
-  removeExpense: (id: string) => void;
-  resetExpenses: () => void;
   incomes: Income[];
-  addIncome: (income: Omit<Income, "id">) => void;
-  updateIncome: (id: string, updated: Omit<Income, "id">) => void;
-  removeIncome: (id: string) => void;
+  loading: boolean;
+  error: string | null;
+  addExpense: (expense: Omit<Expense, "id">) => Promise<void>;
+  updateExpense: (id: string, updated: Omit<Expense, "id">) => Promise<void>;
+  removeExpense: (id: string) => Promise<void>;
+  addIncome: (income: Omit<Income, "id">) => Promise<void>;
+  updateIncome: (id: string, updated: Omit<Income, "id">) => Promise<void>;
+  removeIncome: (id: string) => Promise<void>;
 };
 
 const BudgetContext = createContext<BudgetContextValue | null>(null);
 
-const STORAGE_KEY = "budgetBuddy:expenses";
-const INCOME_STORAGE_KEY = "budgetBuddy:incomes";
-
-function loadStoredExpenses(): Expense[] {
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) return initialExpenses;
-    const parsed = JSON.parse(stored) as Expense[];
-    if (!Array.isArray(parsed)) return initialExpenses;
-    return parsed;
-  } catch {
-    return initialExpenses;
-  }
-}
-
-function persistExpenses(expenses: Expense[]) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
-  } catch {
-    // ignore
-  }
-}
-
-function loadStoredIncomes(): Income[] {
-  try {
-    const stored = window.localStorage.getItem(INCOME_STORAGE_KEY);
-    if (!stored) return initialIncomes;
-    const parsed = JSON.parse(stored) as Income[];
-    if (!Array.isArray(parsed)) return initialIncomes;
-    return parsed;
-  } catch {
-    return initialIncomes;
-  }
-}
-
-function persistIncomes(incomes: Income[]) {
-  try {
-    window.localStorage.setItem(INCOME_STORAGE_KEY, JSON.stringify(incomes));
-  } catch {
-    // ignore
-  }
-}
-
 export function BudgetProvider({ children }: { children: React.ReactNode }) {
-  const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
-  const [incomes, setIncomes] = useState<Income[]>(initialIncomes);
+  const { user } = useAuth();
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [incomes, setIncomes] = useState<Income[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Jab user login ho, uske data ko real-time listen karo
   useEffect(() => {
-    setExpenses(loadStoredExpenses());
-    setIncomes(loadStoredIncomes());
-  }, []);
+    // Agar user logged in nahi hai to data clear karo
+    if (!user) {
+      setExpenses([]);
+      setIncomes([]);
+      setLoading(false);
+      return;
+    }
 
-  useEffect(() => {
-    persistExpenses(expenses);
-  }, [expenses]);
+    setLoading(true);
+    setError(null);
 
-  useEffect(() => {
-    persistIncomes(incomes);
-  }, [incomes]);
+    let expensesLoaded = false;
+    let incomesLoaded = false;
 
-  const value = useMemo<BudgetContextValue>(() => {
-    const addExpense = (expense: Omit<Expense, "id">) => {
-      setExpenses((prev) => [
-        { ...expense, id: crypto.randomUUID() },
-        ...prev,
-      ]);
+    const checkLoaded = () => {
+      if (expensesLoaded && incomesLoaded) {
+        setLoading(false);
+      }
     };
 
-    const updateExpense = (id: string, updated: Omit<Expense, "id">) => {
-      setExpenses((prev) =>
-        prev.map((expense) => (expense.id === id ? { ...expense, ...updated } : expense))
-      );
-    };
+    // Expenses ko listen karo
+    const unsubExpenses = listenToExpenses(
+      user.uid,
+      (data) => {
+        setExpenses(data);
+        expensesLoaded = true;
+        checkLoaded();
+      },
+      (err) => {
+        console.error("Expenses listen error:", err);
+        setError("Failed to load expenses. Please refresh.");
+        expensesLoaded = true;
+        checkLoaded();
+      }
+    );
 
-    const removeExpense = (id: string) => {
-      setExpenses((prev) => prev.filter((expense) => expense.id !== id));
-    };
+    // Incomes ko listen karo
+    const unsubIncomes = listenToIncomes(
+      user.uid,
+      (data) => {
+        setIncomes(data);
+        incomesLoaded = true;
+        checkLoaded();
+      },
+      (err) => {
+        console.error("Incomes listen error:", err);
+        setError("Failed to load incomes. Please refresh.");
+        incomesLoaded = true;
+        checkLoaded();
+      }
+    );
 
-    const resetExpenses = () => {
-      setExpenses(initialExpenses);
+    // Cleanup: jab user change ho ya component unmount ho
+    return () => {
+      unsubExpenses();
+      unsubIncomes();
     };
+  }, [user]);
 
-    const addIncome = (income: Omit<Income, "id">) => {
-      setIncomes((prev) => [
-        { ...income, id: crypto.randomUUID() },
-        ...prev,
-      ]);
-    };
+  // ============ EXPENSE ACTIONS ============
 
-    const updateIncome = (id: string, updated: Omit<Income, "id">) => {
-      setIncomes((prev) =>
-        prev.map((income) => (income.id === id ? { ...income, ...updated } : income))
-      );
-    };
+  const addExpense = useCallback(async (expense: Omit<Expense, "id">) => {
+    if (!user) return;
+    try {
+      setError(null);
+      await addExpenseToFirestore(user.uid, expense);
+    } catch (err) {
+      console.error("Add expense error:", err);
+      setError("Failed to add expense. Please try again.");
+    }
+  }, [user]);
 
-    const removeIncome = (id: string) => {
-      setIncomes((prev) => prev.filter((income) => income.id !== id));
-    };
+  const updateExpense = useCallback(async (id: string, updated: Omit<Expense, "id">) => {
+    if (!user) return;
+    try {
+      setError(null);
+      await updateExpenseInFirestore(user.uid, id, updated);
+    } catch (err) {
+      console.error("Update expense error:", err);
+      setError("Failed to update expense. Please try again.");
+    }
+  }, [user]);
 
-    return {
+  const removeExpense = useCallback(async (id: string) => {
+    if (!user) return;
+    try {
+      setError(null);
+      await deleteExpenseFromFirestore(user.uid, id);
+    } catch (err) {
+      console.error("Delete expense error:", err);
+      setError("Failed to delete expense. Please try again.");
+    }
+  }, [user]);
+
+  // ============ INCOME ACTIONS ============
+
+  const addIncome = useCallback(async (income: Omit<Income, "id">) => {
+    if (!user) return;
+    try {
+      setError(null);
+      await addIncomeToFirestore(user.uid, income);
+    } catch (err) {
+      console.error("Add income error:", err);
+      setError("Failed to add income. Please try again.");
+    }
+  }, [user]);
+
+  const updateIncome = useCallback(async (id: string, updated: Omit<Income, "id">) => {
+    if (!user) return;
+    try {
+      setError(null);
+      await updateIncomeInFirestore(user.uid, id, updated);
+    } catch (err) {
+      console.error("Update income error:", err);
+      setError("Failed to update income. Please try again.");
+    }
+  }, [user]);
+
+  const removeIncome = useCallback(async (id: string) => {
+    if (!user) return;
+    try {
+      setError(null);
+      await deleteIncomeFromFirestore(user.uid, id);
+    } catch (err) {
+      console.error("Delete income error:", err);
+      setError("Failed to delete income. Please try again.");
+    }
+  }, [user]);
+
+  const value = useMemo<BudgetContextValue>(
+    () => ({
       expenses,
+      incomes,
+      loading,
+      error,
       addExpense,
       updateExpense,
       removeExpense,
-      resetExpenses,
-      incomes,
       addIncome,
       updateIncome,
       removeIncome,
-    };
-  }, [expenses, incomes]);
+    }),
+    [expenses, incomes, loading, error, addExpense, updateExpense, removeExpense, addIncome, updateIncome, removeIncome]
+  );
 
   return <BudgetContext.Provider value={value}>{children}</BudgetContext.Provider>;
 }
