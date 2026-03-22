@@ -1,9 +1,14 @@
+// Budget Data Types aur Categories
+// Sirf types aur categories hain yahan - koi hardcoded data nahi
+
 export type Expense = {
   id: string;
   date: string; // ISO yyyy-mm-dd
   description: string;
   category: string;
   amount: number;
+  createdAt?: string; // Firebase timestamp
+  updatedAt?: string; // Firebase timestamp
 };
 
 export type Income = {
@@ -12,8 +17,11 @@ export type Income = {
   description: string;
   source: string;
   amount: number;
+  createdAt?: string; // Firebase timestamp
+  updatedAt?: string; // Firebase timestamp
 };
 
+// Categories list - expense form me dropdown ke liye
 export const categories = [
   { value: "Food", label: "Food" },
   { value: "Transportation", label: "Transportation" },
@@ -22,52 +30,4 @@ export const categories = [
   { value: "Shopping", label: "Shopping" },
   { value: "Health", label: "Health" },
   { value: "Other", label: "Other" },
-];
-
-export const initialExpenses: Expense[] = [
-  {
-    id: "1",
-    date: "2026-03-10",
-    description: "Groceries at Farmers Market",
-    category: "Food",
-    amount: 42.25,
-  },
-  {
-    id: "2",
-    date: "2026-03-12",
-    description: "Monthly subway pass",
-    category: "Transportation",
-    amount: 54.0,
-  },
-  {
-    id: "3",
-    date: "2026-03-14",
-    description: "Electricity bill",
-    category: "Utilities",
-    amount: 78.6,
-  },
-  {
-    id: "4",
-    date: "2026-03-16",
-    description: "Movie night + snacks",
-    category: "Entertainment",
-    amount: 29.9,
-  },
-  {
-    id: "5",
-    date: "2026-03-17",
-    description: "New running shoes",
-    category: "Shopping",
-    amount: 112.0,
-  },
-];
-
-export const initialIncomes: Income[] = [
-  {
-    id: "i1",
-    date: "2026-03-01",
-    description: "Monthly salary",
-    source: "Salary",
-    amount: 50000,
-  },
 ];

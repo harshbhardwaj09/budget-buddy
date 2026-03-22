@@ -1,9 +1,33 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function LoginPage() {
+  const { user, loading, error, signInWithGoogle } = useAuth();
+  const router = useRouter();
+
+  // Agar user pehle se logged in hai to dashboard pe bhej do
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace("/");
+    }
+  }, [user, loading, router]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-slate-600 dark:text-slate-300">
+        Loading...
+      </div>
+    );
+  }
+
+  // Agar user logged in hai to kuch mat dikhao (redirect ho raha hai)
+  if (user) return null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 flex items-center justify-center px-4">
       <div className="absolute top-4 right-4">
@@ -36,10 +60,17 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* Error message */}
+        {error && (
+          <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
         {/* Sign-in button */}
         <button
           type="button"
-          onClick={() => signIn("google", { callbackUrl: "/" })}
+          onClick={signInWithGoogle}
           className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           {/* Google Icon */}

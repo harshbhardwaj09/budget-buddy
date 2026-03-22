@@ -18,7 +18,7 @@ function monthLabel(date: Date) {
 }
 
 export default function ExpenseInsights() {
-  const { expenses, incomes, updateExpense, removeExpense, updateIncome, removeIncome } = useBudget();
+  const { expenses, incomes, updateExpense, removeExpense, updateIncome, removeIncome, loading, error: budgetError } = useBudget();
 
   const today = new Date();
   const defaultFrom = new Date();
@@ -199,11 +199,11 @@ export default function ExpenseInsights() {
 
   const cancelEditIncome = () => setEditingIncome(null);
 
-  const saveEditIncome = () => {
+  const saveEditIncome = async () => {
     if (!editingIncome) return;
     const amount = parseFloat(editingIncome.amount);
     if (Number.isNaN(amount) || amount <= 0 || !editingIncome.source.trim()) return;
-    updateIncome(editingIncome.id, { source: editingIncome.source.trim(), description: editingIncome.description.trim(), amount, date: editingIncome.date });
+    await updateIncome(editingIncome.id, { source: editingIncome.source.trim(), description: editingIncome.description.trim(), amount, date: editingIncome.date });
     setEditingIncome(null);
   };
 
@@ -213,14 +213,26 @@ export default function ExpenseInsights() {
 
   const cancelEditExpense = () => setEditingExpense(null);
 
-  const saveEditExpense = () => {
+  const saveEditExpense = async () => {
     if (!editingExpense) return;
     const amount = parseFloat(editingExpense.amount);
     if (Number.isNaN(amount) || amount <= 0) return;
-    updateExpense(editingExpense.id, { date: editingExpense.date, description: editingExpense.description.trim(), category: editingExpense.category, amount });
+    await updateExpense(editingExpense.id, { date: editingExpense.date, description: editingExpense.description.trim(), category: editingExpense.category, amount });
     setEditingExpense(null);
   };
 
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-white via-sky-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950">
+        <AppHeader title="Spending Insights" subtitle="Loading your data..." />
+        <div className="flex items-center justify-center py-20 text-slate-500">
+          Loading insights data...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-sky-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950">
@@ -235,6 +247,13 @@ export default function ExpenseInsights() {
       />
 
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
+        {/* Error banner */}
+        {budgetError && (
+          <div className="mb-6 rounded-2xl bg-red-50 px-5 py-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
+            {budgetError}
+          </div>
+        )}
+
         <section className="rounded-3xl border border-slate-200/70 bg-[var(--card)] p-6 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-[var(--card)]/60">
           {/* Mode tabs */}
           <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">

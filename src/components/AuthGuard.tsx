@@ -3,23 +3,21 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  // Router use hota hai redirect karne ke liye.
   const router = useRouter();
-  // Session status se pata chalta hai user logged-in hai ya nahi.
-  const { status } = useSession();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
     // Agar user logged-in nahi hai to login page pe bhej do.
-    if (status === "unauthenticated") {
+    if (!loading && !user) {
       router.replace("/login");
     }
-  }, [status, router]);
+  }, [user, loading, router]);
 
-  // Session check hote time loading state dikhao.
-  if (status === "loading") {
+  // Auth check hote time loading state dikhao.
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-sm text-slate-600 dark:text-slate-300">
         Checking login...
@@ -27,8 +25,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Redirect trigger ho chuka hota hai, tab tak kuch render na karo.
-  if (status === "unauthenticated") {
+  // User logged in nahi hai - redirect ho raha hai.
+  if (!user) {
     return null;
   }
 
