@@ -40,10 +40,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(
       auth,
-      (firebaseUser) => {
+      async (firebaseUser) => {
         setUser(firebaseUser);
         setLoading(false);
         setError(null);
+
+        // Jab bhi user login ho (fresh ya returning), profile save karo
+        if (firebaseUser) {
+          try {
+            await saveUserProfile(firebaseUser.uid, {
+              displayName: firebaseUser.displayName,
+              email: firebaseUser.email,
+              photoURL: firebaseUser.photoURL,
+              phoneNumber: firebaseUser.phoneNumber,
+              emailVerified: firebaseUser.emailVerified,
+            });
+          } catch (err) {
+            console.error("Failed to save user profile:", err);
+          }
+        }
       },
       (err) => {
         console.error("Auth state error:", err);
@@ -64,16 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     try {
       setError(null);
-      const result = await signInWithPopup(auth, googleProvider);
-      const u = result.user;
-      // Save full user profile to Firestore
-      await saveUserProfile(u.uid, {
-        displayName: u.displayName,
-        email: u.email,
-        photoURL: u.photoURL,
-        phoneNumber: u.phoneNumber,
-        emailVerified: u.emailVerified,
-      });
+      await signInWithPopup(auth, googleProvider);
+      // Profile save onAuthStateChanged me hoga automatically
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Google sign-in failed";
       // Agar user ne popup band kiya to error mat dikhao
