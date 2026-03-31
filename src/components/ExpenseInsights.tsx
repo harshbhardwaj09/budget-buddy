@@ -651,7 +651,7 @@ export default function ExpenseInsights() {
               Portfolio
             </a>
           </p>
-          <p>© {new Date().getFullYear()} Budget Buddy</p>
+          <p>© {new Date().getFullYear()} Budget Cash Flow</p>
         </div>
       </footer>
     </div>

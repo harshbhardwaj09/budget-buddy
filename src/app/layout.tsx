@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Budget Buddy",
-  description: "A colorful, responsive budget manager UI built with Next.js.",
+  title: "Budget Cash Flow",
+  description: "A colorful, responsive budget cash flow manager UI built with Next.js.",
 };
 
 export default function RootLayout({

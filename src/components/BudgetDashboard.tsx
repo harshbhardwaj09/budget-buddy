@@ -221,7 +221,7 @@ export default function BudgetDashboard() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950">
-        <AppHeader title="Budget Buddy" subtitle="Loading your data..." />
+        <AppHeader title="Budget Cash Flow" subtitle="Loading your data..." />
         <div className="flex items-center justify-center py-20 text-slate-500">
           Loading your budget data...
         </div>
@@ -232,7 +232,7 @@ export default function BudgetDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950">
       <AppHeader
-        title="Budget Buddy"
+        title="Budget Cash Flow"
         subtitle="Track expenses, categorize spending, and keep your money on track."
       />
 
@@ -677,7 +677,7 @@ export default function BudgetDashboard() {
               Portfolio
             </a>
           </p>
-          <p>© {new Date().getFullYear()} Budget Buddy</p>
+          <p>© {new Date().getFullYear()} Budget Cash Flow</p>
         </div>
       </footer>
     </div>

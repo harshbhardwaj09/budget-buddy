@@ -53,7 +53,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-            Budget Buddy
+            Budget Cash Flow
           </h1>
           <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
             Sign in to manage your budget

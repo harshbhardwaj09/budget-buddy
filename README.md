@@ -1,6 +1,6 @@
-# Budget Buddy
+# Budget Cash Flow
 
-A responsive, colorful budget tracking UI built with **Next.js** and **Tailwind CSS**.
+A responsive, colorful budget cash flow tracking UI built with **Next.js** and **Tailwind CSS**.
 
 This project is a frontend-only prototype that lets you add expenses, categorize them, and view a summary of your spending. It includes dummy data and is structured for future backend and login integrations.
 
