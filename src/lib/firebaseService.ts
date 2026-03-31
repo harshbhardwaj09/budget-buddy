@@ -8,6 +8,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  setDoc,
   query,
   orderBy,
   onSnapshot,
@@ -21,6 +22,25 @@ import type { Expense, Income } from "./budgetData";
 function getDb() {
   if (!db) throw new Error("Firestore not initialized. Check Firebase config.");
   return db;
+}
+
+// ============ USER PROFILE ============
+
+// User ka profile save karo (name, email) - login ke baad call hota hai
+export async function saveUserProfile(
+  userId: string,
+  profile: { displayName: string | null; email: string | null }
+): Promise<void> {
+  const docRef = doc(getDb(), "users", userId);
+  await setDoc(
+    docRef,
+    {
+      displayName: profile.displayName ?? "",
+      email: profile.email ?? "",
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 // ============ EXPENSE FUNCTIONS ============

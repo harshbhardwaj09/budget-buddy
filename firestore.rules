@@ -6,6 +6,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // User ka profile document - sirf wahi user access kar sake
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     // User ka expenses collection - sirf wahi user access kar sake
     match /users/{userId}/expenses/{expenseId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;

@@ -12,6 +12,7 @@ import {
   type User,
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
+import { saveUserProfile } from "@/lib/firebaseService";
 
 // Context ka type - kya kya milega components ko
 type AuthContextValue = {
@@ -63,7 +64,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     try {
       setError(null);
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      // Save user profile (name + email) to Firestore
+      await saveUserProfile(result.user.uid, {
+        displayName: result.user.displayName,
+        email: result.user.email,
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Google sign-in failed";
       // Agar user ne popup band kiya to error mat dikhao
