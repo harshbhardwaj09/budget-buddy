@@ -1,5 +1,6 @@
 // Firestore Service - Har user ka data alag alag save hota hai
-// Structure: users/{userId}/expenses/{expenseId}
+// Structure: users/{userId}/userDetail/profile
+//            users/{userId}/expenses/{expenseId}
 //            users/{userId}/incomes/{incomeId}
 
 import {
@@ -9,6 +10,7 @@ import {
   updateDoc,
   deleteDoc,
   setDoc,
+  getDoc,
   query,
   orderBy,
   onSnapshot,
@@ -26,21 +28,61 @@ function getDb() {
 
 // ============ USER PROFILE ============
 
-// User ka profile save karo (name, email) - login ke baad call hota hai
+export type UserProfile = {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL: string;
+  phoneNumber: string;
+  emailVerified: boolean;
+  joinedAt?: string;
+  isPremium: boolean;
+  lastLoginAt: string;
+};
+
+// User ki saari detail save karo - userDetail/profile document me
 export async function saveUserProfile(
   userId: string,
-  profile: { displayName: string | null; email: string | null }
+  profile: {
+    displayName: string | null;
+    email: string | null;
+    photoURL: string | null;
+    phoneNumber: string | null;
+    emailVerified: boolean;
+  }
 ): Promise<void> {
-  const docRef = doc(getDb(), "users", userId);
-  await setDoc(
-    docRef,
-    {
+  const docRef = doc(getDb(), "users", userId, "userDetail", "profile");
+  const docSnap = await getDoc(docRef);
+
+  if (docSnap.exists()) {
+    // Existing user - sirf login info update karo, joinedAt mat chhuo
+    await setDoc(
+      docRef,
+      {
+        uid: userId,
+        displayName: profile.displayName ?? "",
+        email: profile.email ?? "",
+        photoURL: profile.photoURL ?? "",
+        phoneNumber: profile.phoneNumber ?? "",
+        emailVerified: profile.emailVerified,
+        lastLoginAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } else {
+    // New user - joinedAt aur isPremium set karo
+    await setDoc(docRef, {
+      uid: userId,
       displayName: profile.displayName ?? "",
       email: profile.email ?? "",
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
+      photoURL: profile.photoURL ?? "",
+      phoneNumber: profile.phoneNumber ?? "",
+      emailVerified: profile.emailVerified,
+      joinedAt: serverTimestamp(),
+      isPremium: false,
+      lastLoginAt: serverTimestamp(),
+    });
+  }
 }
 
 // ============ EXPENSE FUNCTIONS ============

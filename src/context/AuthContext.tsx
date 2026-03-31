@@ -65,10 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setError(null);
       const result = await signInWithPopup(auth, googleProvider);
-      // Save user profile (name + email) to Firestore
-      await saveUserProfile(result.user.uid, {
-        displayName: result.user.displayName,
-        email: result.user.email,
+      const u = result.user;
+      // Save full user profile to Firestore
+      await saveUserProfile(u.uid, {
+        displayName: u.displayName,
+        email: u.email,
+        photoURL: u.photoURL,
+        phoneNumber: u.phoneNumber,
+        emailVerified: u.emailVerified,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Google sign-in failed";
